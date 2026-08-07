@@ -1,0 +1,27 @@
+## app_settings table
+
+The scaffold expects an app_settings table in your Supabase database to drive runtime configuration. This allows admins to toggle features, configure defaults, and avoid hardcoding behavior in the frontend.
+
+Recommended schema (SQL):
+
+```sql
+create table app_settings (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  value text,
+  type text default 'string', -- e.g. 'string', 'boolean', 'json', 'number'
+  updated_at timestamptz default now()
+);
+```
+
+Example settings you may add:
+- guest_access (boolean)
+- registration_enabled (boolean)
+- maintenance_mode (boolean)
+- default_language (string)
+- supported_languages (json) -- array of language codes
+- feature_flags (json)
+
+Access rules
+- Admin-only updates: Ensure you create RLS policies or server endpoints that only allow admin users to update app_settings.
+- Read access: You may allow public read access to some settings depending on your access model, or load them from a server endpoint that enforces permission checks.

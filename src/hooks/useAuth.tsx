@@ -1,9 +1,7 @@
 /**
- * Auth hook: a lightweight wrapper around Supabase auth features.
- * - Provides guest mode state
- * - Exposes login/register/logout helpers (declarative; integration points)
+ * Enhanced auth hook with profile loading and basic flows.
+ * Keeps guest mode and exposes role in profile when available.
  */
-
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
@@ -21,25 +19,45 @@ export function useAuth(){
   const [guest, setGuest] = useState<boolean>(true)
 
   useEffect(()=>{
-    // initial check
-    const session = supabase.auth.getSession()
-    // getSession returns a promise; handle it
-    session.then(res => {
-      // If there's a user session, fetch profile
-      const s = res.data.session
-      if (s?.user){
-        // TODO: fetch profile row from profiles table on server
-        setUser({ id: s.user.id, email: s.user.email })
-        setGuest(false)
-      } else {
-        setGuest(true)
+    let mounted = true
+    ;(async ()=>{
+      setLoading(true)
+      try {
+        const sessionRes = await supabase.auth.getSession()
+        const session = sessionRes.data.session
+        if (session?.user){
+          const id = session.user.id
+          // fetch profile from profiles table
+          const { data } = await supabase.from('profiles').select('id, email, full_name, avatar, role').eq('id', id).maybeSingle()
+          if (mounted) {
+            if (data) {
+              setUser(data as UserProfile)
+              setGuest(false)
+            } else {
+              // user signed in but profile row missing — set minimal
+              setUser({ id, email: session.user.email })
+              setGuest(false)
+            }
+          }
+        } else {
+          if (mounted) {
+            setUser(null)
+            setGuest(true)
+          }
+        }
+      } catch (err){
+        console.warn('useAuth init error', err)
+      } finally {
+        if (mounted) setLoading(false)
       }
-      setLoading(false)
-    })
+    })()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user){
-        setUser({ id: session.user.id, email: session.user.email })
+        const id = session.user.id
+        const { data } = await supabase.from('profiles').select('id, email, full_name, avatar, role').eq('id', id).maybeSingle()
+        if (data) setUser(data as UserProfile)
+        else setUser({ id, email: session.user.email })
         setGuest(false)
       } else {
         setUser(null)
@@ -47,12 +65,27 @@ export function useAuth(){
       }
     })
 
-    return ()=>{ listener?.subscription?.unsubscribe?.() }
+    return ()=>{ listener?.subscription?.unsubscribe?.() ; mounted = false }
   }, [])
 
-  const signInWithEmail = useCallback(async (email: string) => {
+  const signInWithMagicLink = useCallback(async (email: string) => {
     setLoading(true)
     const res = await supabase.auth.signInWithOtp({ email })
+    setLoading(false)
+    return res
+  }, [])
+
+  const signUp = useCallback(async (email: string, password: string | undefined) => {
+    setLoading(true)
+    // supabase.signUp can accept password or OAuth; here we call signUp
+    const res = await supabase.auth.signUp({ email, password })
+    setLoading(false)
+    return res
+  }, [])
+
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    setLoading(true)
+    const res = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     return res
   }, [])
@@ -63,5 +96,12 @@ export function useAuth(){
     setGuest(true)
   }, [])
 
-  return { user, loading, guest, setGuest, signInWithEmail, signOut }
+  const sendPasswordReset = useCallback(async (email: string) => {
+    setLoading(true)
+    const res = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/auth' })
+    setLoading(false)
+    return res
+  }, [])
+
+  return { user, loading, guest, setGuest, signInWithMagicLink, signUp, signInWithPassword, signOut, sendPasswordReset }
 }
