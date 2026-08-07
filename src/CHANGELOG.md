@@ -1,1 +1,1 @@
-Updated auth UI, settings UI, and added Supabase migration SQL + service interfaces
+Updated: added Supabase Edge Function templates, Vercel API samples, adapters and DB migration for video_jobs, and storage docs.
