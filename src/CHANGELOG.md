@@ -1,1 +1,1 @@
-Updated dependency list and routing protections; added settings, admin settings, tts and auth improvements.
+Updated auth UI, settings UI, and added Supabase migration SQL + service interfaces
